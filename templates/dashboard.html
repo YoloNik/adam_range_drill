@@ -13,6 +13,12 @@
     <div class="panel-kicker">{{ t('dash.step', n=1) }}</div>
     <h2 class="panel-title">{{ t('dash.load_bank') }}</h2>
 
+    {% if limit_reached %}
+    <div class="limit-box" role="status">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="1"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+      <p>{{ t('dash.limit_full', max=max_banks) }}</p>
+    </div>
+    {% else %}
     <form method="post" action="{{ url_for('upload') }}" enctype="multipart/form-data" class="form" id="upload-form">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <label class="dropzone" id="dropzone">
@@ -31,6 +37,7 @@
       </label>
       <button class="btn btn-primary btn-block" type="submit">{{ t('dash.load_submit') }}</button>
     </form>
+    {% endif %}
 
     <details class="format-help">
       <summary>{{ t('dash.format') }}</summary>
@@ -47,7 +54,10 @@
 
   <section class="panel deploy" style="--d: 2">
     <div class="panel-kicker">{{ t('dash.step', n=2) }}</div>
-    <h2 class="panel-title">{{ t('dash.banks') }}</h2>
+    <div class="panel-title-row">
+      <h2 class="panel-title">{{ t('dash.banks') }}</h2>
+      <span class="quota {{ 'quota-full' if limit_reached }}">{{ t('dash.banks_count', n=quizzes|length, max=max_banks) }}</span>
+    </div>
     {% if quizzes %}
       <ul class="bank-list">
         {% for quiz in quizzes %}
@@ -75,6 +85,7 @@
         <p>{{ t('dash.empty') }}<br>{{ t('dash.empty_hint') }}</p>
       </div>
     {% endif %}
+    <p class="retention-note">{{ t('dash.retention', days=inactivity_days) }}</p>
   </section>
 </div>
 
@@ -119,6 +130,7 @@
     const zone = document.getElementById('dropzone');
     const input = document.getElementById('file-input');
     const label = document.getElementById('file-name');
+    if (zone) {
     const show = () => {
       label.textContent = input.files.length ? input.files[0].name : '';
       zone.classList.toggle('has-file', input.files.length > 0);
@@ -129,6 +141,7 @@
     zone.addEventListener('drop', ev => {
       if (ev.dataTransfer.files.length) { input.files = ev.dataTransfer.files; show(); }
     });
+    }
     // Confirmation for delete forms (message comes from a data attribute, so quotes are safe)
     document.querySelectorAll('form[data-confirm]').forEach(f =>
       f.addEventListener('submit', ev => { if (!confirm(f.dataset.confirm)) ev.preventDefault(); }));

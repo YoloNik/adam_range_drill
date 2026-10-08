@@ -287,6 +287,20 @@ input:focus { outline: none; border-color: var(--khaki); box-shadow: 0 0 0 3px r
 .bank-actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
 .bank-actions form { margin: 0; }
 
+.panel-title-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.panel-title-row .panel-title { margin-bottom: 14px; }
+.quota {
+  flex-shrink: 0; font-family: var(--font-ui); font-weight: 700; font-size: .85rem; letter-spacing: .12em; text-transform: uppercase;
+  padding: 3px 10px; border: 1px solid var(--line-strong); border-radius: 3px; color: var(--sand);
+}
+.quota-full { border-color: var(--amber); color: var(--amber); }
+.limit-box {
+  display: flex; align-items: center; gap: 14px; padding: 18px 16px;
+  border: 1px dashed var(--amber); border-radius: var(--radius); background: rgba(226,167,46,.07); color: var(--text);
+}
+.limit-box svg { width: 30px; height: 30px; flex-shrink: 0; fill: none; stroke: var(--amber); stroke-width: 2; }
+.limit-box p { margin: 0; }
+.retention-note { margin: 16px 0 0; padding-top: 12px; border-top: 1px solid var(--line); font-size: .85rem; color: var(--muted); }
 .empty { text-align: center; color: var(--muted); padding: 24px 0; }
 .empty svg { width: 64px; height: 64px; fill: none; stroke: var(--olive-500); stroke-width: 2; animation: pulse 2.4s ease-in-out infinite; }
 .empty svg .fill { fill: var(--red); stroke: none; }

@@ -50,3 +50,11 @@ Tips
 pip install -r requirements.txt
 python app.py            # http://127.0.0.1:5000
 ```
+
+## Storage protection
+- **Limit:** each user can keep up to 5 question banks; the upload form is replaced by a notice when full.
+- **Duplicates:** a file whose questions are already loaded (even renamed, re-saved, reordered or with other IDs)
+  is not stored again — the existing bank is opened instead.
+- **Retention:** banks and test history of users inactive for 30 days are deleted automatically
+  (checked every 6 hours and when the user returns); accounts are kept.
+- New columns are added to an existing database automatically on start — no manual migration needed.

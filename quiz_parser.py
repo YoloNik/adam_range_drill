@@ -13,6 +13,8 @@ Column F accepts:
     * a number 1/2/3.
 A header row is detected and skipped automatically.
 """
+import hashlib
+import json
 from io import BytesIO
 
 from openpyxl import Workbook, load_workbook
@@ -153,6 +155,24 @@ TEMPLATE_HEADERS = {
     "en": ["ID", "Question", "Option A", "Option B", "Option C", "Correct (A/B/C or exact text)"],
     "pl": ["ID", "Pytanie", "Odpowiedź A", "Odpowiedź B", "Odpowiedź C", "Poprawna (A/B/C lub dokładny tekst)"],
 }
+
+
+def content_hash(questions):
+    """Fingerprint of a question bank's content, used to detect duplicate uploads.
+
+    Based on what the questions say, not on the file bytes, so re-saving the same Excel file,
+    renaming it, reordering rows or answer options, changing IDs / letter case / extra spaces still counts
+    as the same bank. `questions` are dicts with "text", "options" and "correct".
+    """
+    def norm(value):
+        return " ".join(str(value).split()).casefold()
+
+    items = sorted(
+        json.dumps([norm(q["text"]), sorted(norm(o) for o in q["options"] if o), norm(q["options"][q["correct"]])],
+                   ensure_ascii=False)
+        for q in questions
+    )
+    return hashlib.sha256("\n".join(items).encode("utf-8")).hexdigest()
 
 
 def build_template(lang="pl", sheet_title="Questions"):

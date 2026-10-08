@@ -1,7 +1,7 @@
 """Range Drill — a Flask app for practising multiple-choice theory tests."""
 import os
 import random
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from flask import (Flask, abort, flash, jsonify, redirect, render_template,
                    request, send_file, url_for)
@@ -13,7 +13,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from i18n import (LANGUAGES, count_questions, get_lang, js_strings, t, tp)
-from quiz_parser import ParseError, build_template, parse_workbook
+from quiz_parser import ParseError, build_template, content_hash, parse_workbook
 
 # --------------------------------------------------------------------------- #
 # Configuration
@@ -82,6 +82,10 @@ app.config.update(
 APP_NAME = os.environ.get("APP_NAME", "Range Drill")
 REGISTRATION_CODE = os.environ.get("REGISTRATION_CODE", "").strip()
 EASY_PASS_RATIO = float(os.environ.get("EASY_PASS_RATIO", "0.8"))
+MAX_BANKS = int(os.environ.get("MAX_BANKS", "5"))                 # question banks per user
+INACTIVITY_DAYS = int(os.environ.get("INACTIVITY_DAYS", "30"))    # then banks + history are deleted
+ACTIVITY_WRITE_EVERY = timedelta(minutes=10)                      # throttle last_active_at updates
+CLEANUP_EVERY = timedelta(hours=6)                                # how often the global purge runs
 
 db = SQLAlchemy(app)
 
@@ -126,15 +130,18 @@ class User(UserMixin, db.Model):
     username = db.Column(db.String(40), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
     created_at = db.Column(db.DateTime(timezone=True), default=utcnow)
+    last_active_at = db.Column(db.DateTime(timezone=True), default=utcnow, index=True)
 
     quizzes = db.relationship("Quiz", backref="owner", cascade="all, delete-orphan")
 
 
 class Quiz(db.Model):
+    __table_args__ = (db.Index("ix_quiz_user_hash", "user_id", "file_hash"),)
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
     title = db.Column(db.String(120), nullable=False)
     filename = db.Column(db.String(255))
+    file_hash = db.Column(db.String(64))  # content fingerprint, see quiz_parser.content_hash
     created_at = db.Column(db.DateTime(timezone=True), default=utcnow)
 
     questions = db.relationship("Question", backref="quiz", cascade="all, delete-orphan",
@@ -185,8 +192,40 @@ class AttemptAnswer(db.Model):
     is_correct = db.Column(db.Boolean, nullable=False)
 
 
+def _upgrade_schema():
+    """Add columns introduced after the first release to an existing database (SQLite or Postgres).
+
+    db.create_all() only creates missing tables, it never alters existing ones.
+    """
+    from sqlalchemy import inspect, text
+
+    engine = db.engine
+    prep = engine.dialect.identifier_preparer
+    inspector = inspect(engine)
+    with engine.begin() as conn:
+        for model, column in ((User, "last_active_at"), (Quiz, "file_hash")):
+            table = model.__table__
+            existing = {c["name"] for c in inspector.get_columns(table.name)}
+            if column not in existing:
+                col = table.c[column]
+                conn.execute(text(f"ALTER TABLE {prep.format_table(table)} ADD COLUMN "
+                                  f"{prep.format_column(col)} {col.type.compile(dialect=engine.dialect)}"))
+                app.logger.info("Schema upgrade: added %s.%s", table.name, column)
+    for index in list(User.__table__.indexes) + list(Quiz.__table__.indexes):
+        index.create(bind=engine, checkfirst=True)
+
+    # Backfill: existing users count as active now, existing banks get their fingerprint
+    User.query.filter(User.last_active_at.is_(None)).update({User.last_active_at: utcnow()},
+                                                            synchronize_session=False)
+    for quiz in Quiz.query.filter(Quiz.file_hash.is_(None)).all():
+        quiz.file_hash = content_hash([{"text": q.text, "options": q.options, "correct": q.correct}
+                                       for q in quiz.questions])
+    db.session.commit()
+
+
 with app.app_context():
     db.create_all()
+    _upgrade_schema()
 
 if os.environ.get("RENDER") and not os.environ.get("DATABASE_URL"):
     # Render's free disk is wiped on every deploy/restart, so SQLite would lose all accounts
@@ -224,6 +263,72 @@ def owned_or_404(model, obj_id):
     if obj is None or obj.user_id != current_user.id:
         abort(404)
     return obj
+
+
+# --------------------------------------------------------------------------- #
+# Retention: delete banks + history of inactive users (accounts are kept)
+# --------------------------------------------------------------------------- #
+def as_utc(value):
+    """SQLite returns naive datetimes; treat them as UTC so comparisons work everywhere."""
+    if value is None:
+        return None
+    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+
+def purge_user_data(user_ids):
+    """Delete all question banks, questions, attempts and answers of the given users."""
+    user_ids = list(user_ids)
+    if not user_ids:
+        return 0
+    attempt_ids = db.select(Attempt.id).where(Attempt.user_id.in_(user_ids))
+    quiz_ids = db.select(Quiz.id).where(Quiz.user_id.in_(user_ids))
+    # Children first, so foreign keys are satisfied on every database
+    AttemptAnswer.query.filter(AttemptAnswer.attempt_id.in_(attempt_ids)).delete(synchronize_session=False)
+    Attempt.query.filter(Attempt.user_id.in_(user_ids)).delete(synchronize_session=False)
+    Question.query.filter(Question.quiz_id.in_(quiz_ids)).delete(synchronize_session=False)
+    removed = Quiz.query.filter(Quiz.user_id.in_(user_ids)).delete(synchronize_session=False)
+    db.session.commit()
+    return removed
+
+
+def purge_inactive_users():
+    """Remove data of every user inactive for INACTIVITY_DAYS who still has something stored."""
+    cutoff = utcnow() - timedelta(days=INACTIVITY_DAYS)
+    stale = db.select(User.id).where(User.last_active_at < cutoff)
+    owners = {uid for (uid,) in db.session.query(Quiz.user_id).filter(Quiz.user_id.in_(stale)).distinct()}
+    owners |= {uid for (uid,) in db.session.query(Attempt.user_id).filter(Attempt.user_id.in_(stale)).distinct()}
+    removed = purge_user_data(owners)
+    if owners:
+        app.logger.info("Retention: removed data of %d inactive user(s), %d bank(s)", len(owners), removed)
+    return len(owners)
+
+
+_last_cleanup = None  # per process; the purge is idempotent, so several workers are fine
+
+
+@app.before_request
+def track_activity_and_cleanup():
+    global _last_cleanup
+    if request.endpoint in (None, "static", "healthz"):
+        return
+    now = utcnow()
+    if _last_cleanup is None or now - _last_cleanup > CLEANUP_EVERY:
+        _last_cleanup = now
+        try:
+            purge_inactive_users()
+        except Exception:  # never block a page because of housekeeping
+            db.session.rollback()
+            app.logger.exception("Retention cleanup failed")
+
+    if current_user.is_authenticated:
+        last = as_utc(current_user.last_active_at)
+        if last is not None and now - last > timedelta(days=INACTIVITY_DAYS):
+            # Came back after the retention period: data goes, the account stays
+            if purge_user_data([current_user.id]):
+                flash(t("flash.data_expired", days=INACTIVITY_DAYS), "info")
+        if last is None or now - last > ACTIVITY_WRITE_EVERY:
+            current_user.last_active_at = now
+            db.session.commit()
 
 
 # --------------------------------------------------------------------------- #
@@ -278,6 +383,12 @@ def login():
         user = User.query.filter(db.func.lower(User.username) == username.lower()).first()
         if user and check_password_hash(user.password_hash, password):
             login_user(user, remember=bool(request.form.get("remember")))
+            last = as_utc(user.last_active_at)
+            if last is not None and utcnow() - last > timedelta(days=INACTIVITY_DAYS):
+                if purge_user_data([user.id]):
+                    flash(t("flash.data_expired", days=INACTIVITY_DAYS), "info")
+            user.last_active_at = utcnow()
+            db.session.commit()
             next_url = request.args.get("next", "")
             if not next_url.startswith("/") or next_url.startswith("//"):
                 next_url = url_for("dashboard")
@@ -307,7 +418,9 @@ def dashboard():
                   .group_by(Question.quiz_id).all())
     attempts = (Attempt.query.filter_by(user_id=current_user.id)
                 .order_by(Attempt.started_at.desc()).limit(10).all())
-    return render_template("dashboard.html", quizzes=quizzes, counts=counts, attempts=attempts)
+    return render_template("dashboard.html", quizzes=quizzes, counts=counts, attempts=attempts,
+                           max_banks=MAX_BANKS, limit_reached=len(quizzes) >= MAX_BANKS,
+                           inactivity_days=INACTIVITY_DAYS)
 
 
 @app.route("/upload", methods=["POST"])
@@ -331,8 +444,18 @@ def upload():
             flash(t(key, **params), "detail")
         return redirect(url_for("dashboard"))
 
+    fingerprint = content_hash(parsed)
+    existing = Quiz.query.filter_by(user_id=current_user.id, file_hash=fingerprint).first()
+    if existing:
+        flash(t("flash.duplicate", title=existing.title), "info")
+        return redirect(url_for("briefing", quiz_id=existing.id))
+    if Quiz.query.filter_by(user_id=current_user.id).count() >= MAX_BANKS:
+        flash(t("flash.limit_reached", max=MAX_BANKS), "error")
+        return redirect(url_for("dashboard"))
+
     title = request.form.get("title", "").strip() or os.path.splitext(file.filename)[0]
-    quiz = Quiz(user_id=current_user.id, title=title[:120], filename=file.filename[:255])
+    quiz = Quiz(user_id=current_user.id, title=title[:120], filename=file.filename[:255],
+                file_hash=fingerprint)
     for pos, q in enumerate(parsed):
         quiz.questions.append(Question(position=pos, external_id=q["external_id"][:64], text=q["text"],
                                        options=q["options"], correct=q["correct"]))
