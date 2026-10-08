@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}{{ t('dash.title') }}{% endblock %}
+{% block content %}
+<div class="page-head deploy">
+  <div class="page-head-text">
+    <div class="panel-kicker">{{ t('dash.kicker') }}</div>
+    <h1 class="page-title">{{ t('dash.greeting', name=current_user.username) }}</h1>
+  </div>
+</div>
+
+<div class="grid-2">
+  <section class="panel deploy" style="--d: 1">
+    <div class="panel-kicker">{{ t('dash.step', n=1) }}</div>
+    <h2 class="panel-title">{{ t('dash.load_bank') }}</h2>
+
+    <form method="post" action="{{ url_for('upload') }}" enctype="multipart/form-data" class="form" id="upload-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label class="dropzone" id="dropzone">
+        <input type="file" name="file" accept=".xlsx,.xlsm" required id="file-input">
+        <svg viewBox="0 0 48 48" aria-hidden="true" class="dz-icon">
+          <rect x="8" y="6" width="32" height="36" rx="2"/>
+          <path d="M16 18h16M16 24h16M16 30h10"/>
+          <path d="M34 34v10M29 39l5 5 5-5" class="dz-arrow"/>
+        </svg>
+        <span class="dz-text"><strong>{{ t('dash.drop') }}</strong><br>{{ t('dash.drop_or') }}</span>
+        <span class="dz-file" id="file-name"></span>
+      </label>
+      <label class="field">
+        <span>{{ t('dash.title_field') }} <em>{{ t('dash.optional') }}</em></span>
+        <input name="title" maxlength="120" placeholder="{{ t('dash.title_placeholder') }}">
+      </label>
+      <button class="btn btn-primary btn-block" type="submit">{{ t('dash.load_submit') }}</button>
+    </form>
+
+    <details class="format-help">
+      <summary>{{ t('dash.format') }}</summary>
+      <table class="format-table">
+        <tr><th>A</th><td>{{ t('dash.col_id') }}</td></tr>
+        <tr><th>B</th><td>{{ t('dash.col_question') }}</td></tr>
+        <tr><th>C–E</th><td>{{ t('dash.col_options') }}</td></tr>
+        <tr><th>F</th><td>{{ t('dash.col_correct') }}</td></tr>
+      </table>
+      <p class="muted small">{{ t('dash.format_note') }}</p>
+      <a class="btn btn-ghost btn-sm" href="{{ url_for('download_template') }}">{{ t('dash.template') }}</a>
+    </details>
+  </section>
+
+  <section class="panel deploy" style="--d: 2">
+    <div class="panel-kicker">{{ t('dash.step', n=2) }}</div>
+    <h2 class="panel-title">{{ t('dash.banks') }}</h2>
+    {% if quizzes %}
+      <ul class="bank-list">
+        {% for quiz in quizzes %}
+        <li class="bank">
+          <div class="bank-info">
+            <span class="bank-title">{{ quiz.title }}</span>
+            <span class="bank-meta">{{ count_questions(counts.get(quiz.id, 0)) }} · {{ quiz.created_at|dt }}</span>
+          </div>
+          <div class="bank-actions">
+            <a class="btn btn-primary btn-sm" href="{{ url_for('briefing', quiz_id=quiz.id) }}">{{ t('dash.start') }}</a>
+            <form method="post" action="{{ url_for('delete_quiz', quiz_id=quiz.id) }}"
+                  data-confirm="{{ t('dash.delete_confirm', title=quiz.title) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-icon" type="submit" aria-label="{{ t('common.delete') }}: {{ quiz.title }}" title="{{ t('common.delete') }}">
+                <svg viewBox="0 0 24 24"><path d="M9 3h6l1 2h4v2H4V5h4l1-2Zm-3 6h12l-1 12H7L6 9Z"/></svg>
+              </button>
+            </form>
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <div class="empty">
+        <svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="24"/><circle cx="32" cy="32" r="12"/><circle cx="32" cy="32" r="3" class="fill"/></svg>
+        <p>{{ t('dash.empty') }}<br>{{ t('dash.empty_hint') }}</p>
+      </div>
+    {% endif %}
+  </section>
+</div>
+
+{% if attempts %}
+<section class="panel deploy" style="--d: 3">
+  <div class="panel-kicker">{{ t('dash.record') }}</div>
+  <h2 class="panel-title">{{ t('dash.recent') }}</h2>
+  <div class="table-wrap">
+    <table class="log">
+      <thead><tr>
+        <th>{{ t('dash.th_date') }}</th><th>{{ t('dash.th_bank') }}</th><th>{{ t('dash.th_mode') }}</th>
+        <th>{{ t('dash.th_score') }}</th><th>{{ t('dash.th_result') }}</th><th></th>
+      </tr></thead>
+      <tbody>
+      {% for a in attempts %}
+        <tr>
+          <td>{{ a.started_at|dt }}</td>
+          <td class="cell-title">{{ a.quiz.title }}</td>
+          <td><span class="mode-chip mode-{{ a.mode }}">{{ t('mode.' ~ a.mode) }}</span></td>
+          <td>{{ a.correct_count }}/{{ a.total }}</td>
+          <td><span class="status status-{{ a.status }}">{{ t('status.' ~ a.status) }}</span></td>
+          <td>
+            {% if a.status == 'active' %}
+              <a href="{{ url_for('run_attempt', attempt_id=a.id) }}">{{ t('dash.resume') }}</a>
+            {% else %}
+              <a href="{{ url_for('results', attempt_id=a.id) }}">{{ t('dash.report') }}</a>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    // Drag & drop upload with filename preview
+    const zone = document.getElementById('dropzone');
+    const input = document.getElementById('file-input');
+    const label = document.getElementById('file-name');
+    const show = () => {
+      label.textContent = input.files.length ? input.files[0].name : '';
+      zone.classList.toggle('has-file', input.files.length > 0);
+    };
+    input.addEventListener('change', show);
+    ['dragenter', 'dragover'].forEach(e => zone.addEventListener(e, ev => { ev.preventDefault(); zone.classList.add('drag'); }));
+    ['dragleave', 'drop'].forEach(e => zone.addEventListener(e, ev => { ev.preventDefault(); zone.classList.remove('drag'); }));
+    zone.addEventListener('drop', ev => {
+      if (ev.dataTransfer.files.length) { input.files = ev.dataTransfer.files; show(); }
+    });
+    // Confirmation for delete forms (message comes from a data attribute, so quotes are safe)
+    document.querySelectorAll('form[data-confirm]').forEach(f =>
+      f.addEventListener('submit', ev => { if (!confirm(f.dataset.confirm)) ev.preventDefault(); }));
+  })();
+</script>
+{% endblock %}

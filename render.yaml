@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: range-drill
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --preload --workers 2 --timeout 60 --access-logfile -
+    healthCheckPath: /healthz
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.7"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: SECURE_COOKIES
+        value: "1"
+      - key: DATABASE_URL
+        sync: false   # paste your Postgres connection string (e.g. Neon) in the Render dashboard
+      - key: REGISTRATION_CODE
+        sync: false   # optional: only people who know this code can register
+      - key: APP_NAME
+        value: "Range Drill"

@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}{{ t('res.title') }}{% endblock %}
+{% block content %}
+{% set passed = attempt.status == 'passed' %}
+{% set allowed = MODES[attempt.mode].allowed %}
+<section class="debrief panel deploy {{ 'is-pass' if passed else 'is-fail' }}">
+  <div class="debrief-head">
+    <div class="debrief-title">
+      <div class="panel-kicker">{{ t('res.kicker') }} · {{ attempt.quiz.title }}</div>
+      <h1 class="page-title">
+        {% if passed %}{{ t('res.accomplished') }}{% elif attempt.status == 'abandoned' %}{{ t('res.aborted') }}{% else %}{{ t('res.failed') }}{% endif %}
+      </h1>
+      <p class="muted">
+        {% if attempt.status == 'failed' and allowed is not none and attempt.errors > allowed %}
+          {{ tp('res.out_of_hp', attempt.errors) }}
+        {% elif attempt.status == 'failed' %}
+          {{ t('res.below_mark', p=easy_pass_pct) }}
+        {% elif attempt.mode == 'easy' and passed %}
+          {{ t('res.above_mark', p=easy_pass_pct) }}
+        {% elif passed %}
+          {{ t('res.within_limit') }}
+        {% endif %}
+      </p>
+    </div>
+    <div class="stamp {{ 'stamp-pass' if passed else 'stamp-fail' }}">
+      {{ t('res.stamp_pass') if passed else (t('res.stamp_abort') if attempt.status == 'abandoned' else t('res.stamp_fail')) }}
+    </div>
+  </div>
+
+  <div class="score-row">
+    <div class="score-ring" style="--p: {{ score_pct }}">
+      <svg viewBox="0 0 120 120" aria-hidden="true">
+        <circle cx="60" cy="60" r="52" class="track"/>
+        <circle cx="60" cy="60" r="52" class="fill" pathLength="100"/>
+        <path d="M60 0v14M60 106v14M0 60h14M106 60h14" class="ticks"/>
+      </svg>
+      <span class="score-num" data-count="{{ score_pct }}">0%</span>
+    </div>
+    <div class="stats-grid">
+      <div class="stat-box"><span class="stat-label">{{ t('res.hits') }}</span><span class="stat-big ok">{{ attempt.correct_count }}</span></div>
+      <div class="stat-box"><span class="stat-label">{{ t('res.misses') }}</span><span class="stat-big bad">{{ wrong }}</span></div>
+      <div class="stat-box"><span class="stat-label">{{ t('res.not_reached') }}</span><span class="stat-big">{{ unanswered }}</span></div>
+      <div class="stat-box"><span class="stat-label">{{ t('res.mode') }}</span><span class="stat-big small"><span class="mode-chip mode-{{ attempt.mode }}">{{ t('mode.' ~ attempt.mode) }}</span></span></div>
+      <div class="stat-box"><span class="stat-label">{{ t('res.time') }}</span><span class="stat-big small">{{ duration|duration }}</span></div>
+      <div class="stat-box"><span class="stat-label">{{ t('res.questions') }}</span><span class="stat-big small">{{ attempt.total }}</span></div>
+    </div>
+  </div>
+
+  <div class="debrief-actions">
+    <form method="post" action="{{ url_for('retry_attempt', attempt_id=attempt.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="scope" value="all">
+      <button class="btn btn-primary" type="submit">{{ t('res.retry') }}</button>
+    </form>
+    {% if wrong + unanswered > 0 %}
+    <form method="post" action="{{ url_for('retry_attempt', attempt_id=attempt.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="scope" value="missed">
+      <button class="btn btn-secondary" type="submit">{{ t('res.drill_missed', n=wrong + unanswered) }}</button>
+    </form>
+    {% endif %}
+    <a class="btn btn-ghost" href="{{ url_for('briefing', quiz_id=attempt.quiz_id) }}">{{ t('res.change_mode') }}</a>
+    <a class="btn btn-ghost" href="{{ url_for('dashboard') }}">{{ t('common.back_to_base') }}</a>
+  </div>
+</section>
+
+<section class="panel deploy" style="--d: 2">
+  <div class="review-head">
+    <h2 class="panel-title">{{ t('res.review') }}</h2>
+    <div class="tabs" role="tablist">
+      <button class="tab active" data-filter="all" type="button">{{ t('res.all') }} <b>{{ rows|length }}</b></button>
+      <button class="tab" data-filter="wrong" type="button">{{ t('res.misses') }} <b>{{ wrong }}</b></button>
+      <button class="tab" data-filter="correct" type="button">{{ t('res.hits') }} <b>{{ attempt.correct_count }}</b></button>
+      {% if unanswered %}<button class="tab" data-filter="unanswered" type="button">{{ t('res.not_reached') }} <b>{{ unanswered }}</b></button>{% endif %}
+    </div>
+  </div>
+
+  <ol class="review">
+    {% for r in rows %}
+    <li class="review-item state-{{ r.state }}" data-state="{{ r.state }}">
+      <div class="review-top">
+        <span class="review-n">#{{ r.n }}</span>
+        <span class="review-id">ID {{ r.q.external_id }}</span>
+        <span class="review-tag">{{ t({'correct': 'res.tag_hit', 'wrong': 'res.tag_miss', 'unanswered': 'res.tag_unanswered'}[r.state]) }}</span>
+      </div>
+      <p class="review-q">{{ r.q.text }}</p>
+      <ul class="review-opts">
+        {% for opt in r.q.options %}{% if opt %}
+          {% set is_right = loop.index0 == r.q.correct %}
+          {% set is_chosen = r.answer and r.answer.chosen == loop.index0 %}
+          <li class="{{ 'opt-right' if is_right }} {{ 'opt-chosen' if is_chosen }} {{ 'opt-wrong' if is_chosen and not is_right }}">
+            <span class="opt-letter">{{ 'ABC'[loop.index0] }}</span>
+            <span class="opt-text">{{ opt }}</span>
+            {% if is_chosen %}<em class="opt-note">{{ t('res.your_answer') }}</em>{% elif is_right and r.state != 'correct' %}<em class="opt-note">{{ t('res.correct') }}</em>{% endif %}
+          </li>
+        {% endif %}{% endfor %}
+      </ul>
+    </li>
+    {% endfor %}
+  </ol>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    // Score counter animation
+    const el = document.querySelector('.score-num');
+    const target = +el.dataset.count;
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce) { el.textContent = target + '%'; }
+    else {
+      const t0 = performance.now() + 300, dur = 1200;
+      const step = now => {
+        const k = Math.max(0, Math.min((now - t0) / dur, 1));
+        el.textContent = Math.round(target * (1 - Math.pow(1 - k, 3))) + '%';
+        if (k < 1) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    }
+    // Review filter tabs
+    const tabs = document.querySelectorAll('.tab');
+    tabs.forEach(tab => tab.addEventListener('click', () => {
+      tabs.forEach(t => t.classList.toggle('active', t === tab));
+      const f = tab.dataset.filter;
+      document.querySelectorAll('.review-item').forEach(item => {
+        item.hidden = f !== 'all' && item.dataset.state !== f;
+      });
+    }));
+  })();
+</script>
+{% endblock %}

@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}{{ t('login.title') }}{% endblock %}
+{% block body_class %}page-auth{% endblock %}
+{% block content %}
+<section class="auth-wrap">
+  <div class="panel auth-card deploy">
+    <div class="panel-kicker">{{ t('login.kicker') }}</div>
+    <h1 class="panel-title">{{ t('login.title') }}</h1>
+    <p class="lead muted">{{ t('login.lead') }}</p>
+    <form method="post" class="form" autocomplete="on">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label class="field">
+        <span>{{ t('common.username') }}</span>
+        <input name="username" required autofocus autocomplete="username" maxlength="40">
+      </label>
+      <label class="field">
+        <span>{{ t('common.password') }}</span>
+        <input name="password" type="password" required autocomplete="current-password">
+      </label>
+      <label class="check"><input type="checkbox" name="remember" checked><span>{{ t('login.remember') }}</span></label>
+      <button class="btn btn-primary btn-block" type="submit">{{ t('login.submit') }}</button>
+    </form>
+    <p class="auth-switch">{{ t('login.no_account') }} <a href="{{ url_for('register') }}">{{ t('login.enlist') }}</a></p>
+  </div>
+</section>
+{% endblock %}

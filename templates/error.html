@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}{{ code }}{% endblock %}
+{% block content %}
+<section class="panel deploy error-panel">
+  <div class="panel-kicker">{{ t('error.title', code=code) }}</div>
+  <h1 class="panel-title">{{ message }}</h1>
+  <a class="btn btn-primary" href="{{ url_for('index') }}">{{ t('common.back_to_base') }}</a>
+</section>
+{% endblock %}

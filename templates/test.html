@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}{{ t('test.title') }}{% endblock %}
+{% block body_class %}page-test{% endblock %}
+{% block content %}
+<div id="range" class="range" data-attempt="{{ attempt.id }}"
+     data-state-url="{{ url_for('api_state', attempt_id=attempt.id) }}"
+     data-answer-url="{{ url_for('api_answer', attempt_id=attempt.id) }}">
+
+  <div class="hud deploy">
+    <div class="hud-left">
+      <span class="mode-chip mode-{{ attempt.mode }}">{{ t('mode.' ~ attempt.mode) }}</span>
+      <span class="hud-title">{{ attempt.quiz.title }}</span>
+    </div>
+
+    <div class="hp" id="hp" aria-live="polite">
+      <div class="hp-label">
+        <span class="hp-tag">HP</span>
+        <span class="hp-count" id="hp-count"></span>
+      </div>
+      <div class="hp-bar" id="hp-bar"></div>
+    </div>
+
+    <div class="hud-right">
+      <div class="stat"><span class="stat-label">{{ t('test.question') }}</span><span class="stat-value" id="q-counter">–</span></div>
+      <div class="stat"><span class="stat-label">{{ t('test.hits') }}</span><span class="stat-value ok" id="hits">0</span></div>
+      <div class="stat"><span class="stat-label">{{ t('test.misses') }}</span><span class="stat-value bad" id="misses">0</span></div>
+    </div>
+  </div>
+
+  <div class="progress"><span id="progress-fill"></span></div>
+
+  <section class="target-card" id="card">
+    <div class="q-meta"><span id="q-id"></span></div>
+    <h1 class="q-text" id="q-text">{{ t('test.loading') }}</h1>
+    <div class="answers" id="answers" role="group" aria-label="{{ t('test.answers') }}"></div>
+
+    <div class="feedback" id="feedback" hidden>
+      <span class="fb-badge" id="fb-badge"></span>
+      <span class="fb-text" id="fb-text"></span>
+      <button class="btn btn-primary" id="next-btn" type="button"></button>
+    </div>
+    <div class="hit-marker" id="hit-marker" aria-hidden="true"></div>
+  </section>
+
+  <div class="test-foot">
+    <span class="hint">{{ t('test.tip', keys='<kbd>1</kbd>–<kbd>3</kbd>')|safe }}</span>
+    <form method="post" action="{{ url_for('abandon_attempt', attempt_id=attempt.id) }}" data-confirm="{{ t('test.abort_confirm') }}" id="abort-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-ghost btn-sm" type="submit">{{ t('test.abort') }}</button>
+    </form>
+  </div>
+</div>
+
+<div class="vignette" id="vignette" aria-hidden="true"></div>
+
+<div class="overlay" id="overlay" hidden>
+  <div class="overlay-box">
+    <div class="overlay-kicker" id="overlay-kicker"></div>
+    <div class="overlay-title" id="overlay-title"></div>
+    <a class="btn btn-primary btn-lg" id="overlay-btn" href="#">{{ t('test.view_debrief') }}</a>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+{% endblock %}
+{% block scripts %}
+<script id="i18n" type="application/json">{{ dict(js_strings, next=t('test.next'), finish=t('test.finish'))|tojson }}</script>
+<script src="{{ url_for('static', filename='js/test.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}{{ t('brief.title') }}{% endblock %}
+{% block content %}
+<div class="page-head deploy">
+  <div class="page-head-text">
+    <div class="panel-kicker">{{ t('brief.kicker') }}</div>
+    <h1 class="page-title">{{ quiz.title }}</h1>
+    <p class="muted">{{ t('brief.lead', n=total) }}</p>
+  </div>
+  <a class="btn btn-ghost btn-sm" href="{{ url_for('dashboard') }}">← {{ t('common.back_to_base') }}</a>
+</div>
+
+<form method="post" class="briefing">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <div class="mode-grid" role="radiogroup" aria-label="{{ t('brief.difficulty') }}">
+    {% for key, m in MODES.items() %}
+    <label class="mode-card mode-{{ key }} deploy" style="--d: {{ loop.index }}">
+      <input type="radio" name="mode" value="{{ key }}" {% if key == 'medium' %}checked{% endif %} required>
+      <span class="mode-inner">
+        <span class="chevrons" aria-hidden="true">
+          {% for _ in range(m.rank) %}<i></i>{% endfor %}
+        </span>
+        <span class="mode-name">{{ t('mode.' ~ key) }}</span>
+        <span class="mode-hp">
+          {% if m.allowed is none %}
+            <span class="pips pips-inf" aria-hidden="true">∞</span>
+            <span class="hp-caption">{{ t('mode.unlimited') }}</span>
+          {% else %}
+            <span class="pips" aria-hidden="true">{% for _ in range(m.allowed + 1) %}<i></i>{% endfor %}</span>
+            <span class="hp-caption">{{ tp('mode.allowed', m.allowed) }}</span>
+          {% endif %}
+        </span>
+        <span class="mode-desc">{{ t('mode.' ~ key ~ '.desc') }}</span>
+        <span class="lock-corners" aria-hidden="true"></span>
+      </span>
+    </label>
+    {% endfor %}
+  </div>
+
+  <div class="panel options-panel deploy" style="--d: 5">
+    <div class="option-row">
+      <label class="switch"><input type="checkbox" name="shuffle_questions" value="1" checked><span class="slider"></span><span>{{ t('brief.shuffle_q') }}</span></label>
+      <label class="switch"><input type="checkbox" name="shuffle_options" value="1"><span class="slider"></span><span>{{ t('brief.shuffle_a') }}</span></label>
+      <label class="field field-inline">
+        <span>{{ t('brief.questions') }}</span>
+        <input type="number" name="limit" min="1" max="{{ total }}" value="{{ total }}" inputmode="numeric">
+        <small>{{ t('brief.of', n=total) }}</small>
+      </label>
+    </div>
+    <button class="btn btn-primary btn-lg btn-fire" type="submit">
+      <span>{{ t('brief.begin') }}</span>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 1v6M12 17v6M1 12h6M17 12h6"/></svg>
+    </button>
+  </div>
+</form>
+{% endblock %}

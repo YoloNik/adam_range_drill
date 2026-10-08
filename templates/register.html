@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}{{ t('register.title') }}{% endblock %}
+{% block body_class %}page-auth{% endblock %}
+{% block content %}
+<section class="auth-wrap">
+  <div class="panel auth-card deploy">
+    <div class="panel-kicker">{{ t('register.kicker') }}</div>
+    <h1 class="panel-title">{{ t('register.title') }}</h1>
+    <p class="lead muted">{{ t('register.lead') }}</p>
+    <form method="post" class="form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label class="field">
+        <span>{{ t('common.username') }}</span>
+        <input name="username" required minlength="3" maxlength="40" autocomplete="username"
+               pattern="[A-Za-z0-9._\-]+" title="{{ t('register.username_hint') }}" value="{{ request.form.username }}">
+        <small>{{ t('register.username_hint') }}</small>
+      </label>
+      <label class="field">
+        <span>{{ t('common.password') }}</span>
+        <input name="password" type="password" required minlength="6" autocomplete="new-password">
+      </label>
+      <label class="field">
+        <span>{{ t('register.confirm') }}</span>
+        <input name="confirm" type="password" required minlength="6" autocomplete="new-password">
+      </label>
+      {% if needs_code %}
+      <label class="field">
+        <span>{{ t('register.code') }}</span>
+        <input name="code" required autocomplete="off">
+        <small>{{ t('register.code_hint') }}</small>
+      </label>
+      {% endif %}
+      <button class="btn btn-primary btn-block" type="submit">{{ t('register.submit') }}</button>
+    </form>
+    <p class="auth-switch">{{ t('register.have_account') }} <a href="{{ url_for('login') }}">{{ t('register.sign_in') }}</a></p>
+  </div>
+</section>
+{% endblock %}
