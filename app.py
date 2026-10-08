@@ -36,6 +36,15 @@ def _database_url():
     return url
 
 
+def _engine_options():
+    options = {"pool_pre_ping": True, "pool_recycle": 280}
+    if _database_url().startswith("postgresql+psycopg://"):
+        # Connection poolers (Neon "-pooler" hosts, PgBouncer) can break server-side
+        # prepared statements; plain queries are fast enough for this app.
+        options["connect_args"] = {"prepare_threshold": None}
+    return options
+
+
 def _local_secret_key():
     """Random secret key kept in instance/secret_key, so logins survive restarts on a local server."""
     path = os.path.join(INSTANCE_DIR, "secret_key")
@@ -61,7 +70,7 @@ app.config.update(
     SECRET_KEY=os.environ.get("SECRET_KEY") or _local_secret_key(),
     SQLALCHEMY_DATABASE_URI=_database_url(),
     # pre_ping + recycle: survive Neon/Postgres closing idle connections while it sleeps
-    SQLALCHEMY_ENGINE_OPTIONS={"pool_pre_ping": True, "pool_recycle": 280},
+    SQLALCHEMY_ENGINE_OPTIONS=_engine_options(),
     MAX_CONTENT_LENGTH=5 * 1024 * 1024,  # 5 MB upload limit
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
