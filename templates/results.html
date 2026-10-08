@@ -6,7 +6,7 @@
 <section class="debrief panel deploy {{ 'is-pass' if passed else 'is-fail' }}">
   <div class="debrief-head">
     <div class="debrief-title">
-      <div class="panel-kicker">{{ t('res.kicker') }} · {{ attempt.quiz.title }}</div>
+      <div class="panel-kicker">{{ t('res.kicker') }} · {{ attempt.quiz|qtitle }}</div>
       <h1 class="page-title">
         {% if passed %}{{ t('res.accomplished') }}{% elif attempt.status == 'abandoned' %}{{ t('res.aborted') }}{% else %}{{ t('res.failed') }}{% endif %}
       </h1>

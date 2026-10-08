@@ -282,6 +282,16 @@ input:focus { outline: none; border-color: var(--khaki); box-shadow: 0 0 0 3px r
 }
 @media (hover: hover) { .bank:hover { border-left-color: var(--red); transform: translateX(3px); } }
 .bank-info { display: flex; flex-direction: column; min-width: 0; }
+.bank-official {
+  margin-bottom: 14px; border-left-color: var(--red);
+  background: linear-gradient(90deg, rgba(220,20,60,.10), rgba(10,13,8,.3) 60%);
+}
+.badge-official {
+  align-self: flex-start; display: inline-flex; align-items: center; gap: 5px; margin-bottom: 4px;
+  font-family: var(--font-ui); font-weight: 700; font-size: .72rem; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--red);
+}
+.badge-official svg { width: 12px; height: 12px; fill: var(--red); }
 .bank-title { font-weight: 600; color: var(--paper); overflow-wrap: anywhere; }
 .bank-meta { font-size: .85rem; color: var(--muted); }
 .bank-actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }

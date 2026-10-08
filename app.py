@@ -1,6 +1,9 @@
 """Range Drill — a Flask app for practising multiple-choice theory tests."""
+import glob
+import json
 import os
 import random
+import secrets
 from datetime import datetime, timedelta, timezone
 
 from flask import (Flask, abort, flash, jsonify, redirect, render_template,
@@ -86,6 +89,8 @@ MAX_BANKS = int(os.environ.get("MAX_BANKS", "5"))                 # question ban
 INACTIVITY_DAYS = int(os.environ.get("INACTIVITY_DAYS", "30"))    # then banks + history are deleted
 ACTIVITY_WRITE_EVERY = timedelta(minutes=10)                      # throttle last_active_at updates
 CLEANUP_EVERY = timedelta(hours=6)                                # how often the global purge runs
+BUILTIN_DIR = os.path.join(BASE_DIR, "data", "builtin")           # question banks shipped with the app
+SYSTEM_USERNAME = "#system"  # owns built-in banks; '#' can't be registered and the password is random
 
 db = SQLAlchemy(app)
 
@@ -142,6 +147,7 @@ class Quiz(db.Model):
     title = db.Column(db.String(120), nullable=False)
     filename = db.Column(db.String(255))
     file_hash = db.Column(db.String(64))  # content fingerprint, see quiz_parser.content_hash
+    builtin_slug = db.Column(db.String(64), index=True)  # set for banks shipped with the app
     created_at = db.Column(db.DateTime(timezone=True), default=utcnow)
 
     questions = db.relationship("Question", backref="quiz", cascade="all, delete-orphan",
@@ -203,7 +209,7 @@ def _upgrade_schema():
     prep = engine.dialect.identifier_preparer
     inspector = inspect(engine)
     with engine.begin() as conn:
-        for model, column in ((User, "last_active_at"), (Quiz, "file_hash")):
+        for model, column in ((User, "last_active_at"), (Quiz, "file_hash"), (Quiz, "builtin_slug")):
             table = model.__table__
             existing = {c["name"] for c in inspector.get_columns(table.name)}
             if column not in existing:
@@ -223,9 +229,54 @@ def _upgrade_schema():
     db.session.commit()
 
 
+BUILTIN_TITLES = {}  # slug -> {"pl": ..., "en": ...}
+
+
+def _system_user():
+    user = User.query.filter_by(username=SYSTEM_USERNAME).first()
+    if user is None:
+        user = User(username=SYSTEM_USERNAME, password_hash=generate_password_hash(secrets.token_hex(32)))
+        db.session.add(user)
+        db.session.flush()
+    return user
+
+
+def _seed_builtin_banks():
+    """Load data/builtin/*.json into the database. A changed file becomes a new version;
+    old versions stay (hidden) so users' past results keep working."""
+    for path in sorted(glob.glob(os.path.join(BUILTIN_DIR, "*.json"))):
+        with open(path, encoding="utf-8") as f:
+            bank = json.load(f)
+        slug, questions = bank["slug"], bank["questions"]
+        BUILTIN_TITLES[slug] = bank["title"]
+        fingerprint = content_hash(questions)
+        latest = latest_builtin(slug)
+        if latest is not None and latest.file_hash == fingerprint:
+            continue
+        quiz = Quiz(user_id=_system_user().id, title=bank["title"]["pl"][:120],
+                    filename=bank.get("source", os.path.basename(path))[:255],
+                    file_hash=fingerprint, builtin_slug=slug)
+        for pos, q in enumerate(questions):
+            quiz.questions.append(Question(position=pos, external_id=str(q["id"])[:64], text=q["text"],
+                                           options=q["options"], correct=q["correct"]))
+        db.session.add(quiz)
+        db.session.commit()
+        app.logger.info("Built-in bank '%s' loaded: %d questions", slug, len(questions))
+
+
+def latest_builtin(slug):
+    return Quiz.query.filter_by(builtin_slug=slug).order_by(Quiz.id.desc()).first()
+
+
+def builtin_banks():
+    """Current version of every built-in bank."""
+    return [q for q in (latest_builtin(slug) for slug in sorted(BUILTIN_TITLES)) if q is not None]
+
+
 with app.app_context():
     db.create_all()
     _upgrade_schema()
+    _seed_builtin_banks()
 
 if os.environ.get("RENDER") and not os.environ.get("DATABASE_URL"):
     # Render's free disk is wiped on every deploy/restart, so SQLite would lose all accounts
@@ -236,6 +287,13 @@ if os.environ.get("RENDER") and not os.environ.get("DATABASE_URL"):
 @login_manager.user_loader
 def load_user(user_id):
     return db.session.get(User, int(user_id))
+
+
+@app.template_filter("qtitle")
+def quiz_title(quiz):
+    """Built-in banks show their title in the current language."""
+    titles = BUILTIN_TITLES.get(quiz.builtin_slug) if quiz.builtin_slug else None
+    return (titles.get(get_lang()) or titles.get("pl")) if titles else quiz.title
 
 
 @app.context_processor
@@ -265,6 +323,14 @@ def owned_or_404(model, obj_id):
     return obj
 
 
+def quiz_or_404(quiz_id):
+    """A bank the current user may use: their own or a built-in one."""
+    quiz = db.session.get(Quiz, quiz_id)
+    if quiz is None or not (quiz.builtin_slug or quiz.user_id == current_user.id):
+        abort(404)
+    return quiz
+
+
 # --------------------------------------------------------------------------- #
 # Retention: delete banks + history of inactive users (accounts are kept)
 # --------------------------------------------------------------------------- #
@@ -281,12 +347,13 @@ def purge_user_data(user_ids):
     if not user_ids:
         return 0
     attempt_ids = db.select(Attempt.id).where(Attempt.user_id.in_(user_ids))
-    quiz_ids = db.select(Quiz.id).where(Quiz.user_id.in_(user_ids))
+    quiz_ids = db.select(Quiz.id).where(Quiz.user_id.in_(user_ids), Quiz.builtin_slug.is_(None))
     # Children first, so foreign keys are satisfied on every database
     AttemptAnswer.query.filter(AttemptAnswer.attempt_id.in_(attempt_ids)).delete(synchronize_session=False)
     Attempt.query.filter(Attempt.user_id.in_(user_ids)).delete(synchronize_session=False)
     Question.query.filter(Question.quiz_id.in_(quiz_ids)).delete(synchronize_session=False)
-    removed = Quiz.query.filter(Quiz.user_id.in_(user_ids)).delete(synchronize_session=False)
+    removed = (Quiz.query.filter(Quiz.user_id.in_(user_ids), Quiz.builtin_slug.is_(None))
+               .delete(synchronize_session=False))
     db.session.commit()
     return removed
 
@@ -294,7 +361,7 @@ def purge_user_data(user_ids):
 def purge_inactive_users():
     """Remove data of every user inactive for INACTIVITY_DAYS who still has something stored."""
     cutoff = utcnow() - timedelta(days=INACTIVITY_DAYS)
-    stale = db.select(User.id).where(User.last_active_at < cutoff)
+    stale = db.select(User.id).where(User.last_active_at < cutoff, User.username != SYSTEM_USERNAME)
     owners = {uid for (uid,) in db.session.query(Quiz.user_id).filter(Quiz.user_id.in_(stale)).distinct()}
     owners |= {uid for (uid,) in db.session.query(Attempt.user_id).filter(Attempt.user_id.in_(stale)).distinct()}
     removed = purge_user_data(owners)
@@ -418,7 +485,11 @@ def dashboard():
                   .group_by(Question.quiz_id).all())
     attempts = (Attempt.query.filter_by(user_id=current_user.id)
                 .order_by(Attempt.started_at.desc()).limit(10).all())
-    return render_template("dashboard.html", quizzes=quizzes, counts=counts, attempts=attempts,
+    builtins = builtin_banks()
+    counts.update(dict(db.session.query(Question.quiz_id, db.func.count(Question.id))
+                       .filter(Question.quiz_id.in_([q.id for q in builtins] or [0]))
+                       .group_by(Question.quiz_id).all()))
+    return render_template("dashboard.html", quizzes=quizzes, counts=counts, attempts=attempts, builtins=builtins,
                            max_banks=MAX_BANKS, limit_reached=len(quizzes) >= MAX_BANKS,
                            inactivity_days=INACTIVITY_DAYS)
 
@@ -445,9 +516,10 @@ def upload():
         return redirect(url_for("dashboard"))
 
     fingerprint = content_hash(parsed)
-    existing = Quiz.query.filter_by(user_id=current_user.id, file_hash=fingerprint).first()
+    existing = (Quiz.query.filter_by(user_id=current_user.id, file_hash=fingerprint).first()
+                or next((b for b in builtin_banks() if b.file_hash == fingerprint), None))
     if existing:
-        flash(t("flash.duplicate", title=existing.title), "info")
+        flash(t("flash.duplicate", title=quiz_title(existing)), "info")
         return redirect(url_for("briefing", quiz_id=existing.id))
     if Quiz.query.filter_by(user_id=current_user.id).count() >= MAX_BANKS:
         flash(t("flash.limit_reached", max=MAX_BANKS), "error")
@@ -508,7 +580,7 @@ def create_attempt(quiz, mode, question_ids, shuffle_questions, shuffle_options)
 @app.route("/quiz/<int:quiz_id>", methods=["GET", "POST"])
 @login_required
 def briefing(quiz_id):
-    quiz = owned_or_404(Quiz, quiz_id)
+    quiz = quiz_or_404(quiz_id)
     total = len(quiz.questions)
     if request.method == "POST":
         mode = request.form.get("mode")

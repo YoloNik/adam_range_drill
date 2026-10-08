@@ -124,6 +124,8 @@ TRANSLATIONS = {
                             "en": "You can keep up to {max} question banks. Delete one to upload a new one."},
     "flash.data_expired": {"pl": "Po {days} dniach bez aktywności Twoje bazy pytań i historia testów zostały usunięte. Konto pozostało.",
                            "en": "After {days} days without activity your question banks and test history were deleted. Your account is still here."},
+    "dash.official": {"pl": "Oficjalna baza", "en": "Official bank"},
+    "dash.official_note": {"pl": "dostępna zawsze", "en": "always available"},
     "dash.banks_count": {"pl": "{n} z {max}", "en": "{n} of {max}"},
     "dash.limit_full": {"pl": "Limit baz pytań osiągnięty ({max}). Usuń jedną z listy, aby wczytać nową.",
                         "en": "Question bank limit reached ({max}). Delete one from the list to upload a new one."},

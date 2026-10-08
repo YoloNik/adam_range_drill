@@ -58,6 +58,21 @@
       <h2 class="panel-title">{{ t('dash.banks') }}</h2>
       <span class="quota {{ 'quota-full' if limit_reached }}">{{ t('dash.banks_count', n=quizzes|length, max=max_banks) }}</span>
     </div>
+    {% for quiz in builtins %}
+    <div class="bank bank-official">
+      <div class="bank-info">
+        <span class="badge-official">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 15.6 6.6 18.5l1.2-6L3.3 8.3l6.1-.7L12 2z"/></svg>
+          {{ t('dash.official') }}
+        </span>
+        <span class="bank-title">{{ quiz|qtitle }}</span>
+        <span class="bank-meta">{{ count_questions(counts.get(quiz.id, 0)) }} · {{ t('dash.official_note') }}</span>
+      </div>
+      <div class="bank-actions">
+        <a class="btn btn-primary btn-sm" href="{{ url_for('briefing', quiz_id=quiz.id) }}">{{ t('dash.start') }}</a>
+      </div>
+    </div>
+    {% endfor %}
     {% if quizzes %}
       <ul class="bank-list">
         {% for quiz in quizzes %}
@@ -103,7 +118,7 @@
       {% for a in attempts %}
         <tr>
           <td>{{ a.started_at|dt }}</td>
-          <td class="cell-title">{{ a.quiz.title }}</td>
+          <td class="cell-title">{{ a.quiz|qtitle }}</td>
           <td><span class="mode-chip mode-{{ a.mode }}">{{ t('mode.' ~ a.mode) }}</span></td>
           <td>{{ a.correct_count }}/{{ a.total }}</td>
           <td><span class="status status-{{ a.status }}">{{ t('status.' ~ a.status) }}</span></td>

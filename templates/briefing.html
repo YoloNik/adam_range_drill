@@ -4,7 +4,7 @@
 <div class="page-head deploy">
   <div class="page-head-text">
     <div class="panel-kicker">{{ t('brief.kicker') }}</div>
-    <h1 class="page-title">{{ quiz.title }}</h1>
+    <h1 class="page-title">{{ quiz|qtitle }}</h1>
     <p class="muted">{{ t('brief.lead', n=total) }}</p>
   </div>
   <a class="btn btn-ghost btn-sm" href="{{ url_for('dashboard') }}">← {{ t('common.back_to_base') }}</a>

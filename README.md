@@ -51,6 +51,21 @@ pip install -r requirements.txt
 python app.py            # http://127.0.0.1:5000
 ```
 
+## Official question bank (always available)
+`data/builtin/*.json` banks are loaded into the database on start and shown to every user as
+**Oficjalna baza**: no upload needed, not counted in the 5-bank limit, never deleted by users or by the
+inactivity cleanup. Included: *Egzamin na patent strzelecki* — 155 questions (161 in the source document,
+6 exact duplicates removed; IDs are the original question numbers).
+
+To update it after editing the Word file:
+```bash
+pip install python-docx
+python tools/docx_to_bank.py EGZAMIN_NA_PATENT_STRZELECKI.docx data/builtin/patent_strzelecki.json \
+    --slug patent-strzelecki --title-pl "Egzamin na patent strzelecki" --title-en "Shooting licence exam (Polish)"
+```
+The tool refuses to write the file if any answer is ambiguous. Commit and push — on the next start the new
+version replaces the old one on the dashboard; past results keep working.
+
 ## Storage protection
 - **Limit:** each user can keep up to 5 question banks; the upload form is replaced by a notice when full.
 - **Duplicates:** a file whose questions are already loaded (even renamed, re-saved, reordered or with other IDs)

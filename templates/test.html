@@ -9,7 +9,7 @@
   <div class="hud deploy">
     <div class="hud-left">
       <span class="mode-chip mode-{{ attempt.mode }}">{{ t('mode.' ~ attempt.mode) }}</span>
-      <span class="hud-title">{{ attempt.quiz.title }}</span>
+      <span class="hud-title">{{ attempt.quiz|qtitle }}</span>
     </div>
 
     <div class="hp" id="hp" aria-live="polite">
