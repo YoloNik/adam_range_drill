@@ -525,6 +525,8 @@ input:focus { outline: none; border-color: var(--khaki); box-shadow: 0 0 0 3px r
 @media (hover: none) { .feedback .btn kbd { display: none; } } /* no keyboard hint on touch screens */
 
 /* HIT / MISS marker that pops over the card */
+.load-error { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.load-error small { font-family: var(--font-ui); letter-spacing: .08em; color: var(--muted); }
 .hit-marker {
   position: absolute; left: 50%; top: 42%; pointer-events: none; opacity: 0;
   font-family: var(--font-display); font-size: clamp(2.5rem, 8vw, 4.5rem); letter-spacing: .08em; text-transform: uppercase;

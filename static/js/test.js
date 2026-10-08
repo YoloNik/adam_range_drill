@@ -34,10 +34,55 @@
 
   // ------------------------------------------------------------------ network
   async function request(url, options) {
-    const res = await fetch(url, Object.assign({ credentials: 'same-origin' }, options));
-    const data = await res.json().catch(() => ({}));
+    let res;
+    try {
+      res = await fetch(url, Object.assign({ credentials: 'same-origin', cache: 'no-store' }, options));
+    } catch (err) {
+      throw new Error('network');
+    }
+    const isJson = (res.headers.get('content-type') || '').includes('application/json');
+    if (!isJson) {
+      // Not our API answer: session expired (login page) or a proxy/wake-up page
+      throw new Error(res.redirected && /\/login/.test(res.url) ? 'login' : 'HTTP ' + res.status);
+    }
+    const data = await res.json();
     if (!res.ok && !data.state) throw new Error(data.error || ('HTTP ' + res.status));
     return data;
+  }
+
+  // First load: retry a few times (server or database may be waking up), then explain what failed
+  async function boot() {
+    const delays = [0, 1000, 2500, 5000];
+    let lastErr;
+    for (let i = 0; i < delays.length; i++) {
+      if (delays[i]) {
+        els.qText.textContent = tr('reconnecting');
+        await new Promise(r => setTimeout(r, delays[i]));
+      }
+      try {
+        const data = await request(STATE_URL);
+        render(data);
+        return;
+      } catch (err) {
+        lastErr = err;
+        if (err.message === 'login') { location.reload(); return; }
+        if (err.name === 'TypeError' && err.message !== 'network') break;  // a bug in rendering, retrying won't help
+        console.error('Load attempt ' + (i + 1) + ' failed:', err);
+      }
+    }
+    els.qText.textContent = tr('load_failed');
+    const info = document.createElement('div');
+    info.className = 'load-error';
+    const code = document.createElement('small');
+    code.textContent = (lastErr && lastErr.message) || 'unknown';
+    const retry = document.createElement('button');
+    retry.type = 'button';
+    retry.className = 'btn btn-primary btn-sm';
+    retry.textContent = tr('retry');
+    retry.addEventListener('click', () => { info.remove(); boot(); });
+    info.append(retry, code);
+    els.answers.innerHTML = '';
+    els.answers.appendChild(info);
   }
 
   function showToast(text) {
@@ -261,7 +306,5 @@
   });
 
   // ------------------------------------------------------------------ boot
-  request(STATE_URL).then(render).catch(() => {
-    els.qText.textContent = tr('load_failed');
-  });
+  boot();
 })();

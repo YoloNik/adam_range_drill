@@ -277,6 +277,9 @@ with app.app_context():
     db.create_all()
     _upgrade_schema()
     _seed_builtin_banks()
+    # gunicorn --preload forks workers after this point: never share these connections with them
+    db.session.remove()
+    db.engine.dispose()
 
 if os.environ.get("RENDER") and not os.environ.get("DATABASE_URL"):
     # Render's free disk is wiped on every deploy/restart, so SQLite would lose all accounts
@@ -772,6 +775,14 @@ def retry_attempt(attempt_id):
 def too_large(_):
     flash(t("flash.too_large"), "error")
     return redirect(url_for("dashboard"))
+
+
+@app.errorhandler(500)
+def server_error(exc):
+    db.session.rollback()
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "server"}), 500
+    return render_template("error.html", code=500, message=t("error.server")), 500
 
 
 @app.errorhandler(404)

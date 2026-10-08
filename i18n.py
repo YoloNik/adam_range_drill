@@ -205,9 +205,11 @@ TRANSLATIONS = {
     "js.complete": {"pl": "Test zakończony", "en": "Test complete"},
     "js.accomplished": {"pl": "Misja wykonana", "en": "Mission accomplished"},
     "js.failed": {"pl": "Misja nieudana", "en": "Mission failed"},
+    "js.reconnecting": {"pl": "Łączenie z serwerem…", "en": "Connecting to the server…"},
+    "js.retry": {"pl": "Spróbuj ponownie", "en": "Try again"},
     "js.connection": {"pl": "Problem z połączeniem. Spróbuj ponownie.", "en": "Connection problem. Try again."},
-    "js.load_failed": {"pl": "Nie udało się wczytać testu. Odśwież stronę.",
-                       "en": "Could not load the test. Refresh the page."},
+    "js.load_failed": {"pl": "Nie udało się wczytać testu.",
+                       "en": "Could not load the test."},
 
     # ------------------------------------------------------------------ results
     "res.title": {"pl": "Raport", "en": "Debrief"},
@@ -243,6 +245,7 @@ TRANSLATIONS = {
 
     # ------------------------------------------------------------------ errors
     "error.title": {"pl": "Błąd {code}", "en": "Error {code}"},
+    "error.server": {"pl": "Błąd serwera. Spróbuj ponownie za chwilę.", "en": "Server error. Please try again in a moment."},
     "error.not_found": {"pl": "Cel nie został znaleziony.", "en": "Target not found."},
 
     # ------------------------------------------------------------------ Excel template
