@@ -50,30 +50,3 @@ Tips
 pip install -r requirements.txt
 python app.py            # http://127.0.0.1:5000
 ```
-
-## Environment variables
-| Variable | Purpose |
-|---|---|
-| `SECRET_KEY` | Session signing key. Render generates it. Locally a random key is created in `instance/secret_key` |
-| `DATABASE_URL` | Postgres URL (`postgres://` / `postgresql://` both work). Without it a local SQLite file is used (**not persistent on Render free**) |
-| `REGISTRATION_CODE` | Optional: only people who know this code can register |
-| `SECURE_COOKIES` | `1` behind HTTPS (set by `render.yaml`) |
-| `APP_NAME` | Name shown in the header |
-| `EASY_PASS_RATIO` | Pass mark for Easy mode, e.g. `0.8` |
-
-## Deploy to Render (free) + Neon Postgres (free)
-1. **Database** — sign up at neon.tech → *Create project* (region: Europe / Frankfurt) →
-   *Connect* → copy the connection string (`postgresql://...neon.tech/neondb?sslmode=require...`).
-2. **Web service** — render.com → *New* → *Blueprint* → connect GitHub → pick this repo.
-   Render reads `render.yaml` and asks for the secret values:
-   - `DATABASE_URL` — paste the Neon string;
-   - `REGISTRATION_CODE` — optional access code (leave empty for open registration).
-3. Click *Deploy*. After ~2–3 minutes the site is live at `https://<name>.onrender.com`.
-   Tables are created automatically on first start.
-
-Every `git push` to `main` redeploys automatically.
-
-Notes for the free plans
-- Render free sleeps after 15 min without visitors; the first request then takes about a minute.
-- Neon free sleeps after 5 min idle and wakes up in a moment; data is kept (0.5 GB is plenty here).
-- If the Render log shows `DATABASE_URL is not set`, the site runs on temporary storage — set the variable.
